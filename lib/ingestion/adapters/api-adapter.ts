@@ -25,7 +25,7 @@ export class ApiSourceAdapter implements SourceAdapter {
     const json = await res.json();
     let list: unknown[] = Array.isArray(json) ? json : [json];
     for (const key of this.listPath) {
-      if (typeof list === "object" && list !== null && key in (list as Record<string, unknown>)) {
+      if (typeof list === "object" && list !== null && key in (list as unknown as Record<string, unknown>)) {
         list = (list as unknown as Record<string, unknown>)[key] as unknown[];
       }
     }
