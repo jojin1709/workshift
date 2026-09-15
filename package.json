@@ -5,7 +5,7 @@
   "description": "WorkShift — a global, evidence-driven AI Career Intelligence platform. No fabricated data, no login required.",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
     "lint": "eslint . --ext .ts,.tsx",
     "typecheck": "tsc --noEmit",
