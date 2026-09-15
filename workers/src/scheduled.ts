@@ -21,6 +21,16 @@ export interface Env {
   GROQ_API_KEY?: string;
 }
 
+interface ScheduledEvent {
+  cron: string;
+  scheduledTime: number;
+}
+
+interface ExecutionContext {
+  waitUntil(promise: Promise<unknown>): void;
+  passThroughOnException(): void;
+}
+
 type JobName =
   | "hourly-priority-sources"
   | "six-hourly-research-update"
