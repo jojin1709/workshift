@@ -14,9 +14,7 @@ crons = [
   "0 */6 * * *",   # every 6 hours: research/data updates
   "30 2 * * *",    # daily: process new evidence
   "0 3 * * *",     # daily: update affected occupation/task relationships
-  "30 3 * * *",    # daily: recalculate impacted scores
-  "0 4 * * 1",     # weekly (Monday): deep source health check
-  "30 4 * * 1"     # weekly (Monday): data quality report
+  "30 3 * * 1"     # weekly (Monday): deep source health check
 ]
 
 [vars]
