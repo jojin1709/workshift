@@ -1,0 +1,412 @@
+// WorkShift database schema.
+// Every table here is populated ONLY from real, provenance-tracked
+// records. No table is ever filled with placeholder rows in production
+// seeding — see scripts/seed.ts and docs/data-quality.md.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
+}
+
+enum CoverageLevel {
+  HIGH
+  MODERATE
+  LIMITED
+  INSUFFICIENT
+}
+
+enum SourceType {
+  OFFICIAL
+  GOVERNMENT
+  RESEARCH
+  ACADEMIC
+  INDUSTRY
+  NEWS
+  LABOR_MARKET
+  AI_PROVIDER
+  EDUCATION
+}
+
+enum SourceStatus {
+  HEALTHY
+  WARNING
+  FAILED
+  DISABLED
+  UNSUPPORTED
+}
+
+enum EvidenceStrength {
+  STRONG
+  MODERATE
+  WEAK
+  CONFLICTING
+}
+
+enum PipelineRunStatus {
+  RUNNING
+  SUCCEEDED
+  FAILED
+  PARTIAL
+}
+
+model Region {
+  id        String     @id @default(cuid())
+  name      String     @unique
+  countries Country[]
+}
+
+model Country {
+  id             String        @id @default(cuid())
+  isoCode        String        @unique // ISO 3166-1 alpha-2
+  name           String
+  regionId       String?
+  region         Region?       @relation(fields: [regionId], references: [id])
+  coverageLevel  CoverageLevel @default(INSUFFICIENT)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  countryScores  CountryOccupationScore[]
+  newsArticles   NewsArticle[]
+  researchItems  ResearchItem[]
+  courses        CourseCountry[]
+  skills         SkillCountry[]
+
+  @@index([name])
+}
+
+model Industry {
+  id          String       @id @default(cuid())
+  name        String       @unique
+  description String?
+  occupations Occupation[]
+}
+
+model Occupation {
+  id                 String   @id @default(cuid())
+  slug               String   @unique
+  title              String
+  description        String?
+  occupationCode     String?  // external taxonomy code, e.g. O*NET-SOC / ISCO
+  taxonomy           String?  // e.g. "ONET", "ISCO-08"
+  industryId         String?
+  industry           Industry? @relation(fields: [industryId], references: [id])
+  globalAvailability Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  tasks              OccupationTask[]
+  scores             OccupationScore[]
+  countryScores      CountryOccupationScore[]
+  skillLinks         OccupationSkillLink[]
+  evidenceLinks      OccupationEvidence[]
+  claims             Claim[]
+
+  @@index([title])
+  @@index([occupationCode])
+}
+
+model OccupationTask {
+  id                   String   @id @default(cuid())
+  occupationId         String
+  occupation           Occupation @relation(fields: [occupationId], references: [id], onDelete: Cascade)
+  description          String
+  technicalAiCapability Int?    // 0-100, evidence-derived
+  currentAdoption       Int?    // 0-100
+  humanDependency        Int?   // 0-100
+  automationExposure     Int?   // 0-100, computed by scoring engine
+  evidenceCount           Int   @default(0)
+  confidence              EvidenceStrength?
+  lastUpdated             DateTime @updatedAt
+
+  @@index([occupationId])
+}
+
+model Skill {
+  id           String   @id @default(cuid())
+  slug         String   @unique
+  name         String
+  category     String?
+  aiExposure   Int?     // 0-100
+  demandTrend  String?  // "increasing" | "stable" | "decreasing" | null (unknown)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  occupationLinks OccupationSkillLink[]
+  courseLinks     CourseSkillLink[]
+  countries       SkillCountry[]
+  evidenceLinks   SkillEvidence[]
+
+  @@index([name])
+}
+
+model SkillCountry {
+  id       String  @id @default(cuid())
+  skillId  String
+  skill    Skill   @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  countryId String
+  country  Country @relation(fields: [countryId], references: [id], onDelete: Cascade)
+
+  @@unique([skillId, countryId])
+}
+
+model OccupationSkillLink {
+  id           String @id @default(cuid())
+  occupationId String
+  occupation   Occupation @relation(fields: [occupationId], references: [id], onDelete: Cascade)
+  skillId      String
+  skill        Skill  @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  relevance    Int?   // 0-100, optional weighting
+
+  @@unique([occupationId, skillId])
+}
+
+model Course {
+  id                String   @id @default(cuid())
+  slug              String   @unique
+  title             String
+  provider          String
+  description       String?
+  level             String?
+  language           String?
+  officialUrl        String
+  priceVerified       Boolean @default(false)
+  price               String?  // display string only when priceVerified = true
+  lastVerified        DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  skillLinks   CourseSkillLink[]
+  countries    CourseCountry[]
+
+  @@index([title])
+}
+
+model CourseSkillLink {
+  id       String @id @default(cuid())
+  courseId String
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  skillId  String
+  skill    Skill  @relation(fields: [skillId], references: [id], onDelete: Cascade)
+
+  @@unique([courseId, skillId])
+}
+
+model CourseCountry {
+  id        String  @id @default(cuid())
+  courseId  String
+  course    Course  @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  countryId String
+  country   Country @relation(fields: [countryId], references: [id], onDelete: Cascade)
+
+  @@unique([courseId, countryId])
+}
+
+model AiModel {
+  id           String   @id @default(cuid())
+  name         String   @unique
+  vendor       String?
+  releasedAt   DateTime?
+  capabilities AiCapability[]
+}
+
+model AiCapability {
+  id          String   @id @default(cuid())
+  aiModelId   String
+  aiModel     AiModel  @relation(fields: [aiModelId], references: [id], onDelete: Cascade)
+  description String
+  domain      String?
+  sourceId    String?
+  source      Source?  @relation(fields: [sourceId], references: [id])
+}
+
+model Source {
+  id               String       @id @default(cuid())
+  name             String
+  publisher        String?
+  type             SourceType
+  countryId        String?
+  url              String
+  feedUrl          String?
+  apiUrl           String?
+  status           SourceStatus @default(HEALTHY)
+  lastChecked      DateTime?
+  lastSuccess      DateTime?
+  lastFailure      DateTime?
+  credibilityLevel Int          @default(3) // 1 (low) - 5 (high), documented in docs/source-policy.md
+  enabled          Boolean      @default(true)
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  runs         SourceRun[]
+  newsArticles NewsArticle[]
+  researchItems ResearchItem[]
+  evidence     Evidence[]
+  aiCapabilities AiCapability[]
+
+  @@index([type])
+  @@index([status])
+}
+
+model SourceRun {
+  id               String   @id @default(cuid())
+  sourceId         String
+  source           Source   @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  startedAt        DateTime @default(now())
+  finishedAt       DateTime?
+  status           PipelineRunStatus @default(RUNNING)
+  recordsProcessed Int      @default(0)
+  recordsCreated   Int      @default(0)
+  recordsRejected  Int      @default(0)
+  errorMessage     String?
+
+  @@index([sourceId])
+}
+
+model NewsArticle {
+  id           String   @id @default(cuid())
+  title        String
+  sourceId     String
+  source       Source   @relation(fields: [sourceId], references: [id])
+  originalUrl  String   @unique
+  publishedAt  DateTime?
+  retrievedAt  DateTime @default(now())
+  summary      String?
+  category     String?
+  countryId    String?
+  country      Country? @relation(fields: [countryId], references: [id])
+  confidence   EvidenceStrength?
+
+  claims       Claim[]
+
+  @@index([publishedAt])
+  @@index([countryId])
+}
+
+model ResearchItem {
+  id             String   @id @default(cuid())
+  title          String
+  authors        String[] // only populated from verified source metadata
+  publisher      String?
+  journalOrRepo  String?
+  publicationDate DateTime?
+  doi            String?  @unique
+  url            String
+  abstract       String?
+  researchArea   String?
+  sourceId       String
+  source         Source   @relation(fields: [sourceId], references: [id])
+  countryId      String?
+  country        Country? @relation(fields: [countryId], references: [id])
+
+  claims         Claim[]
+
+  @@index([publicationDate])
+}
+
+model Claim {
+  id              String   @id @default(cuid())
+  text            String
+  occupationId    String?
+  occupation      Occupation? @relation(fields: [occupationId], references: [id])
+  newsArticleId   String?
+  newsArticle     NewsArticle? @relation(fields: [newsArticleId], references: [id])
+  researchItemId  String?
+  researchItem    ResearchItem? @relation(fields: [researchItemId], references: [id])
+  extractedByAi   Boolean  @default(false)
+  aiModelUsed     String?
+  createdAt       DateTime @default(now())
+
+  evidence        Evidence[]
+}
+
+model Evidence {
+  id               String   @id @default(cuid())
+  claimId          String
+  claim            Claim    @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  sourceId         String
+  source           Source   @relation(fields: [sourceId], references: [id])
+  strength         EvidenceStrength @default(MODERATE)
+  excerptSummary   String?  // short, paraphrased — never a long verbatim quote
+  createdAt        DateTime @default(now())
+
+  occupationLinks  OccupationEvidence[]
+  skillLinks       SkillEvidence[]
+
+  @@index([sourceId])
+}
+
+model OccupationEvidence {
+  id           String @id @default(cuid())
+  occupationId String
+  occupation   Occupation @relation(fields: [occupationId], references: [id], onDelete: Cascade)
+  evidenceId   String
+  evidence     Evidence   @relation(fields: [evidenceId], references: [id], onDelete: Cascade)
+
+  @@unique([occupationId, evidenceId])
+}
+
+model SkillEvidence {
+  id         String @id @default(cuid())
+  skillId    String
+  skill      Skill  @relation(fields: [skillId], references: [id], onDelete: Cascade)
+  evidenceId String
+  evidence   Evidence @relation(fields: [evidenceId], references: [id], onDelete: Cascade)
+
+  @@unique([skillId, evidenceId])
+}
+
+model OccupationScore {
+  id                  String   @id @default(cuid())
+  occupationId        String
+  occupation          Occupation @relation(fields: [occupationId], references: [id], onDelete: Cascade)
+  aiExposureScore     Int      // 0-100, documented formula — see docs/scoring-methodology.md
+  transformationLevel String   // "minimal" | "moderate" | "significant" | "substantial"
+  confidence          EvidenceStrength
+  evidenceCount        Int
+  methodologyVersion   String
+  calculatedAt         DateTime @default(now())
+
+  @@index([occupationId, calculatedAt])
+}
+
+model CountryOccupationScore {
+  id                  String   @id @default(cuid())
+  occupationId        String
+  occupation          Occupation @relation(fields: [occupationId], references: [id], onDelete: Cascade)
+  countryId           String
+  country             Country  @relation(fields: [countryId], references: [id], onDelete: Cascade)
+  aiExposureScore     Int?
+  coverageLevel       CoverageLevel @default(INSUFFICIENT)
+  confidence          EvidenceStrength?
+  methodologyVersion  String
+  calculatedAt        DateTime @default(now())
+
+  @@unique([occupationId, countryId, methodologyVersion])
+}
+
+model DataQualityEvent {
+  id          String   @id @default(cuid())
+  type        String   // e.g. "broken_url", "duplicate", "missing_metadata", "stale_source"
+  entityType  String
+  entityId    String?
+  detail      String
+  resolved    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+}
+
+model PipelineRun {
+  id               String   @id @default(cuid())
+  jobName          String
+  startedAt        DateTime @default(now())
+  finishedAt       DateTime?
+  status           PipelineRunStatus @default(RUNNING)
+  recordsProcessed Int      @default(0)
+  recordsCreated   Int      @default(0)
+  recordsRejected  Int      @default(0)
+  log              String?
+}

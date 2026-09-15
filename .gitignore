@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Next.js
+.next/
+out/
+build/
+dist/
+
+# Env
+.env
+.env*.local
+!.env.example
+
+# Secrets (never commit these regardless of name)
+*.pem
+*credentials*.json
+
+# Testing
+coverage/
+playwright-report/
+test-results/
+
+# Misc
+.DS_Store
+*.log
+npm-debug.log*
+
+# Wrangler
+.wrangler/
+
+# Prisma
+prisma/*.db
+
+# IDE
+.vscode/
+.idea/

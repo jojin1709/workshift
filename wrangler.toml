@@ -1,0 +1,26 @@
+name = "workshift-pipeline"
+main = "workers/src/scheduled.ts"
+compatibility_date = "2026-06-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Secrets (DATABASE_URL, *_API_KEY) must be set with:
+#   wrangler secret put DATABASE_URL
+#   wrangler secret put ANTHROPIC_API_KEY
+# etc. Never put them in this file or commit them.
+
+[triggers]
+crons = [
+  "0 * * * *",     # hourly: check high-priority AI/news sources
+  "0 */6 * * *",   # every 6 hours: research/data updates
+  "30 2 * * *",    # daily: process new evidence
+  "0 3 * * *",     # daily: update affected occupation/task relationships
+  "30 3 * * *",    # daily: recalculate impacted scores
+  "0 4 * * 1",     # weekly (Monday): deep source health check
+  "30 4 * * 1"     # weekly (Monday): data quality report
+]
+
+[vars]
+ENVIRONMENT = "production"
+
+# [observability]
+# enabled = true
