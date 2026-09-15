@@ -219,4 +219,6 @@ Choose and add a license appropriate for your deployment (e.g. MIT, Apache-2.0).
 
 **Built with evidence, not speculation.**
 
+**Developed by JOJIN JOHN**
+
 </div>
